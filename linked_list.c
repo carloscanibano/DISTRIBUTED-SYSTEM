@@ -60,7 +60,7 @@ int insert_user(User_list *ul, struct user *u){
 
 int insert_user_topic(Topic_list *tl, char *topic_name, short ip, long port){
 	int code = -1;
-	if (verify_topic(*tl, topic_name) == -1) {
+	if (verify_topic(*tl, topic_name) != -1) {
 		struct topic* tp = search_topic(*tl, topic_name);
 		struct user us;
 		us.ip = ip;
@@ -75,15 +75,15 @@ int insert_user_topic(Topic_list *tl, char *topic_name, short ip, long port){
 int insert_user_notopic(Topic_list *tl, char *topic_name, short ip, long port){
 	int code = -1;
 	if (verify_topic(*tl, topic_name) == -1) {
-		struct topic tp;
-		struct user us;
-		us.ip = ip;
-		us.port = port;
-		us.next_user = NULL;
-		strcpy(tp.name, topic_name);
-		insert_user(&tp.user_list, &us);
-		tp.next_topic = NULL;
-		insert_topic(tl, &tp);
+		struct topic *tp = (struct topic *) malloc(sizeof(struct topic));
+		struct user *us = (struct user *) malloc(sizeof(struct user));
+		us->ip = ip;
+		us->port = port;
+		us->next_user = NULL;
+		strcpy(tp->name, topic_name);
+		insert_user(&tp->user_list, us);
+		tp->next_topic = NULL;
+		insert_topic(tl, tp);
 		code = 0;
 	}
 	return code;
