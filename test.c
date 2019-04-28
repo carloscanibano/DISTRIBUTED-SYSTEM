@@ -15,16 +15,21 @@ int main() {
 
 	//Insertar algunos usuarios en la lista de usuarios de tenis
 	struct user *us1 = (struct user *) malloc(sizeof(struct user));
-	us1->ip = 10000;
+	//us1->ip = malloc(256);
+	strcpy(us1->ip, "127.0.0.1");
 	us1->port = 50000;
 
 	struct user *us2 = (struct user *) malloc(sizeof(struct user));
-	us2->ip = 20000;
+	//us2->ip = malloc(256);
+	strcpy(us2->ip, "127.0.0.2");
 	us2->port = 60000;
 
 	struct user *us3 = (struct user *) malloc(sizeof(struct user));
-	us3->ip = 30000;
+	//us3->ip = malloc(256);
+	strcpy(us3->ip, "127.0.0.3");
 	us3->port = 70000;
+
+	//printf("LLEGO\n");
 
 	insert_user(&tenis_users, us1);
 	insert_user(&tenis_users, us2);
@@ -32,15 +37,18 @@ int main() {
 
 	//Insertar algunos usuarios en la lista de usuarios de baloncesto
 	struct user *us4 = (struct user *) malloc(sizeof(struct user));
-	us4->ip = 12343;
+	//us4->ip = malloc(256);
+	strcpy(us4->ip, "127.0.0.4");
 	us4->port = 80000;
 
 	struct user *us5 = (struct user *) malloc(sizeof(struct user));
-	us5->ip = 11111;
+	//us5->ip = malloc(256);
+	strcpy(us5->ip, "127.0.0.5");
 	us5->port = 90000;
 
 	struct user *us6 = (struct user *) malloc(sizeof(struct user));
-	us6->ip = 23432;
+	//us6->ip = malloc(256);
+	strcpy(us6->ip, "127.0.0.6");
 	us6->port = 95000;
 
 	insert_user(&basket_users, us4);
@@ -61,18 +69,18 @@ int main() {
 	insert_topic(&topics, tp2);
 
 	//Insertar un usuario a un tema que existe
-	insert_user_topic(&topics, "Tenis", 2323, 2323);
-	insert_user_topic(&topics, "Basket", 5434, 5434);
+	insert_user_topic(&topics, "Tenis", "127.0.0.7", 2323);
+	insert_user_topic(&topics, "Basket", "127.0.0.8", 5434);
 
 	//Insertar un usuario a un tema que no existe
-	insert_user_notopic(&topics, "Hockey", 2222, 2222);
-	insert_user_notopic(&topics, "Padel", 3333, 3333);
+	insert_user_notopic(&topics, "Hockey", "127.0.0.9", 2222);
+	insert_user_notopic(&topics, "Padel", "127.0.0.10", 3333);
 
 	//Borrar un usuario de un tema que existe
-	delete_user_topic(&topics, "Tenis", 10000, 50000);
+	delete_user_topic(&topics, "Tenis", "127.0.0.1", 50000);
 
 	//Borrar un usuario de un tema que no existe
-	delete_user_topic(&topics, "Armas", 23432, 95000);
+	delete_user_topic(&topics, "Armas", "127.0.0.12", 95000);
 
 	//Mostrar datos actualmente
 	show(topics);

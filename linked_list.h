@@ -9,7 +9,7 @@ struct topic{
 
 //NO OLVIDAR IDENTIFICAR EL CLIENTE POR IP Y PUERTO
 struct user{
-	short ip;
+	char ip[128];
 	long port;
 	struct user *next_user;
 };
@@ -22,16 +22,16 @@ int insert_topic(Topic_list *tl, struct topic *t);
 //Insert user
 int insert_user(User_list *ul, struct user *u);
 //Subscribe user to existing topic
-int insert_user_topic(Topic_list *tl, char *topic_name, short ip, long port);
+int insert_user_topic(Topic_list *tl, char *topic_name, char *ip, long port);
 //Subscribe user to non existing topic
-int insert_user_notopic(Topic_list *tl, char *topic_name, short ip, long port);
+int insert_user_notopic(Topic_list *tl, char *topic_name, char *ip, long port);
 //Unsubscribe user of existing topic/non existing topic
-int delete_user_topic(Topic_list *tl, char *topic_name, short ip, long port);
+int delete_user_topic(Topic_list *tl, char *topic_name, char *ip, long port);
 
 //Verify if a topic exists
 int verify_topic(Topic_list tl, char *topic_name);
 //Verify if a user exists
-int verify_user(User_list ul, short ip, long port);
+int verify_user(User_list ul, char *ip, long port);
 //Show every topic and user inside the linked list
 void show(Topic_list tl);
 //Erase the entire linked list topics
@@ -45,7 +45,7 @@ int user_elements(User_list ul);
 //Look for a specific topic
 struct topic* search_topic(Topic_list tl, char *topic_name);
 //Look for a specific user topics
-char * search_user_topics(Topic_list tl, long ip, short port);
+char * search_user_topics(Topic_list tl, char *ip, short port);
 /*
 //Modify a existing value
 int modify(Triplet_list *l, char *key, char *value1, float value2);

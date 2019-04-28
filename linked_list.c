@@ -38,7 +38,7 @@ int insert_user(User_list *ul, struct user *u){
 
 	if (p1 == NULL) {
 		p1 = (struct user *) malloc(sizeof(struct user));
-		p1->ip = u->ip;
+		strcpy(p1->ip, u->ip);
 		p1->port = u->port;
 		p1->next_user = NULL;
 		*ul = p1;
@@ -49,7 +49,7 @@ int insert_user(User_list *ul, struct user *u){
 				p1 = p1->next_user;
 			}
 			p2 = (struct user *) malloc(sizeof(struct user));
-			p2->ip = u->ip;
+			strcpy(p2->ip, u->ip);
 			p2->port = u->port;
 			p1->next_user = p2;
 			code = 0;
@@ -58,12 +58,12 @@ int insert_user(User_list *ul, struct user *u){
 	return code;
 }
 
-int insert_user_topic(Topic_list *tl, char *topic_name, short ip, long port){
+int insert_user_topic(Topic_list *tl, char *topic_name, char *ip, long port){
 	int code = -1;
 	if (verify_topic(*tl, topic_name) != -1) {
 		struct topic* tp = search_topic(*tl, topic_name);
 		struct user us;
-		us.ip = ip;
+		strcpy(us.ip, ip);
 		us.port = port;
 		us.next_user = NULL;
 		insert_user(&tp->user_list, &us);
@@ -72,12 +72,12 @@ int insert_user_topic(Topic_list *tl, char *topic_name, short ip, long port){
 	return code;
 }
 
-int insert_user_notopic(Topic_list *tl, char *topic_name, short ip, long port){
+int insert_user_notopic(Topic_list *tl, char *topic_name, char *ip, long port){
 	int code = -1;
 	if (verify_topic(*tl, topic_name) == -1) {
 		struct topic *tp = (struct topic *) malloc(sizeof(struct topic));
 		struct user *us = (struct user *) malloc(sizeof(struct user));
-		us->ip = ip;
+		strcpy(us->ip, ip);
 		us->port = port;
 		us->next_user = NULL;
 		strcpy(tp->name, topic_name);
@@ -89,7 +89,7 @@ int insert_user_notopic(Topic_list *tl, char *topic_name, short ip, long port){
 	return code;
 }
 
-int delete_user_topic(Topic_list *tl, char *topic_name, short ip, long port) {
+int delete_user_topic(Topic_list *tl, char *topic_name, char *ip, long port) {
 	User_list aux;
 	int code = -1;
 	if (verify_topic(*tl, topic_name) == -1) {
@@ -100,7 +100,7 @@ int delete_user_topic(Topic_list *tl, char *topic_name, short ip, long port) {
 		return code;
 	} else {
 			User_list cursor = (*tl)->user_list;
-			if ((cursor->ip == ip) && (cursor->port == port)) {
+			if ((strcmp(cursor->ip, ip) == 0) && (cursor->port == port)) {
 				if (cursor->next_user == NULL){
 					free(cursor);
 					//*tl = NULL;
@@ -113,7 +113,7 @@ int delete_user_topic(Topic_list *tl, char *topic_name, short ip, long port) {
 				}
 			} else {
 				while (cursor != NULL) {
-				if ((cursor->ip == ip) && (cursor->port == port)) {
+				if ((strcmp(cursor->ip, ip) == 0) && (cursor->port == port)) {
 					aux = cursor->next_user;
 					cursor->next_user = cursor->next_user->next_user;
 					free(aux);
@@ -138,11 +138,11 @@ int verify_topic(Topic_list tl, char *topic_name){
 		return code;
 }
 
-int verify_user(User_list ul, short ip, long port){
+int verify_user(User_list ul, char *ip, long port){
 	int code = -1;
 	User_list cursor = ul;
 	while (cursor != NULL) {
-		if ((cursor->ip == ip) && (cursor->port == port)) {
+		if ((strcmp(cursor->ip, ip) == 0) && (cursor->port == port)) {
 			code = 0;
 		}
 		cursor = cursor->next_user;
@@ -156,7 +156,7 @@ void show(Topic_list tl) {
 		printf("Name: %s \n", tl->name);
 		ul = tl->user_list;
 		while (ul != NULL) {
-			printf("IP: %d, puerto: %ld \n", ul->ip, ul->port);
+			printf("IP: %s, puerto: %ld \n", ul->ip, ul->port);
 			ul = ul->next_user;
 		}
 		tl = tl->next_topic;

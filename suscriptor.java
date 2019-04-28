@@ -16,6 +16,7 @@ class suscriptor {
 	private static short _port = -1;
 	private static Socket clientSocket = null;
    	private static OutputStream outputStream = null;
+   	private static InputStream inputStream = null;
    	private static BufferedReader bufferedReader = null;
    	private static ServerSocket svSocket = null;
 		
@@ -37,11 +38,15 @@ class suscriptor {
 	   	outputStream.write((topic + "\0").getBytes());
 		//Listener port
 		outputStream.write((String.valueOf(port) + "\0").getBytes());
-		
-	   	String reply = bufferedReader.readLine();
-	   	System.out.println("El valor recibido es: " + reply);
-		if (!reply.equals("0")) System.out.println("Subscribe to: " + topic);
-        
+		/*
+		DataInputStream  in  = new DataInputStream(clientSocket.getInputStream());
+		byte[] aux = null;
+		aux = new byte[256];
+	   	in.read(aux);
+	   	String s = new String(aux);
+	   	System.out.println("El valor recibido es: " + s);
+		if (s.equals("0")) System.out.println("Subscribe to: " + topic);
+		*/
 		return 1;
 	}
 
@@ -58,9 +63,9 @@ class suscriptor {
 		}
 		outputStream.write((String.valueOf(port) + "\0").getBytes());
 
-	   	String reply = bufferedReader.readLine();
+	   	//String reply = bufferedReader.readLine();
 
-		if (!reply.equals("0")) System.out.println("Unsubscribe to: " + topic);
+		//if (!reply.equals("0")) System.out.println("Unsubscribe to: " + topic);
         
 		return 1;
 	}
@@ -189,6 +194,7 @@ class suscriptor {
 	    	//CREACION DEL SOCKET
 	    	clientSocket = new Socket(_server, _port);
 	    	outputStream = clientSocket.getOutputStream();
+	    	inputStream = clientSocket.getInputStream();
 	    	bufferedReader = new BufferedReader(new 
 	    	InputStreamReader(clientSocket.getInputStream()));
 	    	//INVOCACION DE CONSOLA
