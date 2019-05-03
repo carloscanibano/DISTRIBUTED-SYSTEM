@@ -46,6 +46,8 @@ int user_elements(User_list ul);
 struct topic* search_topic(Topic_list tl, char *topic_name);
 //Look for a specific user topics
 char * search_user_topics(Topic_list tl, char *ip, short port);
+//Remove a user from topics after QUIT
+int quit(Topic_list *tl, char *ip, long port);
 /*
 //Modify a existing value
 int modify(Triplet_list *l, char *key, char *value1, float value2);
@@ -53,4 +55,3 @@ int modify(Triplet_list *l, char *key, char *value1, float value2);
 int delete(Triplet_list *l, char *key);
 */
 #endif
-

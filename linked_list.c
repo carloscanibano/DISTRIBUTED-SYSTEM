@@ -66,8 +66,7 @@ int insert_user_topic(Topic_list *tl, char *topic_name, char *ip, long port){
 		strcpy(us.ip, ip);
 		us.port = port;
 		us.next_user = NULL;
-		insert_user(&tp->user_list, &us);
-		code = 0;
+		code = insert_user(&tp->user_list, &us);
 	}
 	return code;
 }
@@ -90,7 +89,7 @@ int insert_user_notopic(Topic_list *tl, char *topic_name, char *ip, long port){
 }
 
 int delete_user_topic(Topic_list *tl, char *topic_name, char *ip, long port) {
-	User_list aux;
+	User_list aux = NULL;
 	int code = -1;
 	if (verify_topic(*tl, topic_name) == -1) {
 		return code;
@@ -100,6 +99,7 @@ int delete_user_topic(Topic_list *tl, char *topic_name, char *ip, long port) {
 		return code;
 	} else {
 			User_list cursor = (*tl)->user_list;
+			//printf("CURSOR IP: %s\n", cursor->ip);
 			if ((strcmp(cursor->ip, ip) == 0) && (cursor->port == port)) {
 				if (cursor->next_user == NULL){
 					free(cursor);
@@ -113,7 +113,8 @@ int delete_user_topic(Topic_list *tl, char *topic_name, char *ip, long port) {
 				}
 			} else {
 				while (cursor != NULL) {
-				if ((strcmp(cursor->ip, ip) == 0) && (cursor->port == port)) {
+				//printf("CURSOR IP ELSE: %s\n", cursor->ip);
+				if ((strcmp(cursor->next_user->ip, ip) == 0) && (cursor->next_user->port == port)) {
 					aux = cursor->next_user;
 					cursor->next_user = cursor->next_user->next_user;
 					free(aux);
@@ -160,6 +161,7 @@ void show(Topic_list tl) {
 			ul = ul->next_user;
 		}
 		tl = tl->next_topic;
+		//if(tl == NULL)printf("NULL\n");
 	}
 }
 
@@ -225,6 +227,26 @@ struct topic* search_topic(Topic_list tl, char *name) {
 	}
 	strcpy(not_found->name, "NOT_FOUND");
 	return not_found;
+}
+
+int quit(Topic_list *tl,  char *ip, long port) {
+	Topic_list cursor = *tl;
+	int code = -1;
+	while(cursor != NULL){
+		//printf("TOPIC: %s\n", cursor->name);
+		struct topic* tp = search_topic(cursor, cursor->name);
+		if (verify_user(tp->user_list, ip, port) == -1) {
+			//printf("NO USUARIO\n");
+			cursor = cursor->next_topic;
+		}else{
+			//printf(" USUARIO\n");
+			if(delete_user_topic(&cursor, cursor->name, ip, port) == -1){
+				return code;
+			}
+		}
+	}
+	code = 1;
+	return code;
 }
 /*
 int modify(Publication_list *l, char *key, char *value1, float value2) {

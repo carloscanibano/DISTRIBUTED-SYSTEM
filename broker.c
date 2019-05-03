@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include "linked_list.h"
 #include "lines.h"
 
@@ -26,7 +27,7 @@ int mensaje_no_copiado = 1;
 pthread_cond_t cond_mensaje;
 Topic_list tl = NULL;
 
-//NO OLVIDARSE DE AÑADIR LA FUNCION 
+//NO OLVIDARSE DE AÑADIR LA FUNCION
 void print_usage() {
 	    printf("Usage: broker -p puerto -r direccion rpc\n");
 }
@@ -40,6 +41,7 @@ void tratar_peticion(struct arg_struct *args){
 		mensaje_no_copiado = 0;
 		pthread_cond_signal(&cond_mensaje);
 		pthread_mutex_unlock(&mutex_mensaje);
+
 
 		int flag = 1;
 		//Hay que sacar la ip del newsd cuando el suscriptor se conecta
@@ -86,6 +88,51 @@ void tratar_peticion(struct arg_struct *args){
 				pthread_mutex_lock(&mutex_operacion);
 				insert_topic(&tl, tp);
 				show(tl);
+				//MIO
+				struct topic *sub = search_topic(tl, tema);
+				User_list subs = sub->user_list;
+				//printf("Name: %s\n", subs->name);
+				if(strcmp(sub->name, "NOT_FOUND") != 0){
+					if(subs == NULL) printf("MAL\n");
+					int i =1;
+					while(i){
+						struct sockaddr_in sub_addr;
+						int sock;
+						if ((sock=socket(AF_INET, SOCK_STREAM, 0))==-1){
+							printf("Error en la creación del socket");
+						}
+						printf("Creo bien el socket\n");
+						printf("Usuario: %s\n", subs->ip);
+						printf("PORT USUARIO: %ld\n", subs->port);
+						struct hostent *hp;
+						bzero((char*)&sub_addr, sizeof(sub_addr));
+						hp = gethostbyname(subs->ip);
+						memcpy(&(sub_addr.sin_addr), hp->h_addr, hp->h_length);
+						//sub_addr.sin_addr.s_addr = *(long *) hp->h_addr;
+						sub_addr.sin_family = AF_INET;
+						sub_addr.sin_port = htons((short)subs->port);
+
+						if(connect(sock, (struct sockaddr*) &sub_addr,
+													sizeof(sub_addr)) < 0) {
+							printf("Error en la conexión\n");
+						}
+						printf("Conexion\n");
+						if(enviar(sock, tema, sizeof(tema)) == -1){
+							printf("Error en el tema\n");
+						}else{
+							printf("Enviado tema\n");
+						}
+						if(enviar(sock, texto, sizeof(texto)) == -1){
+							printf("Error en el texto\n");
+						}else{
+							printf("Enviado texto\n");
+						}
+						subs = subs->next_user;
+						i = 0;
+					}
+				}
+				show(tl);
+				//MIO
 				pthread_mutex_unlock(&mutex_operacion);
 				free(tp);
 			} else if (strcmp(operacion, "SUBSCRIBE") == 0) {
@@ -113,14 +160,32 @@ void tratar_peticion(struct arg_struct *args){
 				//PROBLEMA, NO SE COMO MANDAR EL DATO PARA QUE SE LEA BIEN EN JAVA
 				//unsigned char c = 0;
 				//writeLine(tsd, &c, sizeof(c));
-				char *ptr;
-				long port = strtol(puerto, &ptr, sizeof(puerto));
+				//char *ptr;
+				long port = strtol(puerto, NULL, 10);
 				printf("Direccion ip: %s\n", subscriber_ip);
 				printf("Puerto: %ld\n", port);
 				pthread_mutex_lock(&mutex_operacion);
-				if (insert_user_notopic(&tl, tema, subscriber_ip, port) == -1) {
-					insert_user_topic(&tl, tema, subscriber_ip, port);
+				//MIO
+				char *r1 = "0";
+				char *r2 = "1";
+				int resp = insert_user_notopic(&tl, tema, subscriber_ip, port);
+				if (resp == -1) {
+					resp = insert_user_topic(&tl, tema, subscriber_ip, port);
 				}
+				if(resp == 0){
+					if(enviar(tsd, r1, sizeof(r1)) == 0){
+						printf("ENVIADO 0\n");
+					}else{
+						printf("NO ENVIADO 0\n");
+					}
+				}else{
+					if(enviar(tsd, r2, sizeof(r2)) == 0){
+						printf("ENVIADO 1\n");
+					}else{
+						printf("NO ENVIADO 1\n");
+					}
+				}
+				//MIO
 				show(tl);
 				pthread_mutex_unlock(&mutex_operacion);
 			} else if (strcmp(operacion, "UNSUBSCRIBE") == 0) {
@@ -148,11 +213,33 @@ void tratar_peticion(struct arg_struct *args){
 				//PROBLEMA, NO SE COMO MANDAR EL DATO PARA QUE SE LEA BIEN EN JAVA
 				//unsigned char c = 0;
 				//writeLine(tsd, &c, sizeof(c));
-				char *ptr;
-				long port = strtol(puerto, &ptr, sizeof(puerto));
+				long port = strtol(puerto, NULL, 10);
 				pthread_mutex_lock(&mutex_operacion);
-				delete_user_topic(&tl, tema, subscriber_ip, port);
+				//MIO
+				char *r1 = "0";
+				char *r2 = "1";
+				int resp = delete_user_topic(&tl, tema, subscriber_ip, port);
+				if(resp == 0){
+					enviar(tsd, r1, sizeof(r1));
+				}else{
+					enviar(tsd, r2, sizeof(r2));
+				}
+				//MIO
 				show(tl);
+				pthread_mutex_unlock(&mutex_operacion);
+			}else if(strcmp(operacion, "QUIT") == 0){
+				writeLine(1, operacion, n);
+				//LEEMOS EL PUERTO
+				n = readLine(tsd, puerto, sizeof(puerto));
+				//ESCRIBIMOS EL PUERTO
+				writeLine(1, puerto, n);
+
+				long port = strtol(puerto, NULL, 10);
+				pthread_mutex_lock(&mutex_operacion);
+				if(quit(&tl, subscriber_ip, port) == -1){
+					printf("ERROR EN EL QUIT\n");
+				}
+				//show(tl);
 				pthread_mutex_unlock(&mutex_operacion);
 			}
 		}
@@ -166,19 +253,19 @@ int main(int argc, char *argv[]) {
 
 	while ((option = getopt(argc, argv,"p:r:")) != -1) {
 		switch (option) {
-		    	case 'p' : 
+		    	case 'p' :
 				strcpy(puerto, optarg);
 		    		break;
-	    		case 'r' : 
+	    		case 'r' :
 				strcpy(rpc, optarg);
 	    			break;
-		    	default: 
-				print_usage(); 
+		    	default:
+				print_usage();
 		    		exit(-1);
 		    }
 	}
 	if ((strcmp(puerto, "") == 0) || (strcmp(rpc, "") == 0)){
-		print_usage(); 
+		print_usage();
 		exit(-1);
 	}
 
@@ -186,7 +273,7 @@ int main(int argc, char *argv[]) {
 	printf("Puerto: %s\n", puerto);
 
 	int sd, newsd;
-	socklen_t size;
+	socklen_t size = sizeof client_addr;
 
 	if ((sd=socket(AF_INET, SOCK_STREAM, 0))==-1){
 		printf("Error en la creación del socket");
@@ -195,7 +282,7 @@ int main(int argc, char *argv[]) {
 
 	//Correccion de errores en ejecuciones simultaneas
 	int val = 1;
-	setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, 
+	setsockopt(sd, SOL_SOCKET, SO_REUSEADDR,
 				(void*) &val, sizeof(val));
 
 	bzero((char *)&server_addr, sizeof(server_addr));
@@ -219,12 +306,12 @@ int main(int argc, char *argv[]) {
 
 	for (;;) {
 		newsd=accept (sd, (struct sockaddr *) &client_addr, &size);
-
 		if (newsd < 0) {
 			printf("Error en el accept\n");
 			return(-1);
 		}
 
+		printf("IP cliente: %s\n", inet_ntoa(client_addr.sin_addr));
 		struct arg_struct *args = malloc(sizeof(struct arg_struct));
 		args->socket = newsd;
 		strcpy(args->subscriber_ip, inet_ntoa(client_addr.sin_addr));
@@ -245,4 +332,3 @@ int main(int argc, char *argv[]) {
 	}
 	close(sd);
 }
-	

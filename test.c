@@ -78,9 +78,10 @@ int main() {
 
 	//Borrar un usuario de un tema que existe
 	delete_user_topic(&topics, "Tenis", "127.0.0.1", 50000);
-
 	//Borrar un usuario de un tema que no existe
 	delete_user_topic(&topics, "Armas", "127.0.0.12", 95000);
+
+	quit(&topics , "127.0.0.7", 2323);
 
 	//Mostrar datos actualmente
 	show(topics);
