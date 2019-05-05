@@ -19,9 +19,9 @@ int main(int argc, char *argv[]) {
 	int  option = 0;
 	char host[256]= "";
 	char puerto[256]= "";
-	char tema[256]= "";
-	char texto[1024]= "";
-	char operacion[11] = "PUBLISH";
+	char tema[129]= "";
+	char texto[1025]= "";
+	char operacion[8] = "PUBLISH";
 
 	while ((option = getopt(argc, argv,"h:p:t:m:")) != -1) {
 		switch (option) {
@@ -32,9 +32,17 @@ int main(int argc, char *argv[]) {
 				strcpy(puerto, optarg);
 		    		break;
 		    	case 't' : 
+		    	if (strlen(optarg) > 128) {
+					printf("Max topic name length is 128\n");
+					exit(-1);
+				}
 				strcpy(tema, optarg);
 		    		break;
 		    	case 'm' : 
+		    	if (strlen(optarg) > 1024) {
+					printf("Max topic text length is 1024\n");
+					exit(-1);
+				}
 				strcpy(texto, optarg);
 		    		break;
 		    	default: 
@@ -48,12 +56,6 @@ int main(int argc, char *argv[]) {
 		exit(-1);
 	}
 
-
-	printf("Host: %s\n", host);
-	printf("Puerto: %s\n", puerto);
-	printf("Tema: %s\n", tema);
-	printf("texto: %s\n", texto);
-
 	int sd;      
 	short port;
 	struct sockaddr_in server_addr;
@@ -66,19 +68,14 @@ int main(int argc, char *argv[]) {
 	memcpy(&(server_addr.sin_addr), hp->h_addr, hp->h_length);
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
-	// se establece la conexión
+	//Se establece la conexión
 	if(connect(sd, (struct sockaddr*) &server_addr, 
 								sizeof(server_addr)) < 0) {
-		printf("Error en la conexión\n");
+		printf("Error in the connection to the server <%s>:<%s>\n", host, puerto);
 		return(0);
 	}
 	/* se usa sd para enviar o recibir datos del servidor */
-
-	//int n;
-
 	for (;;) {
-		//char buffer[256];
-		//n = readLine(0, buffer, sizeof(buffer));
 		enviar(sd, operacion, strlen(operacion) + 1);
 		enviar(sd, tema, strlen(tema) + 1);
 		enviar(sd, texto, strlen(texto) + 1);

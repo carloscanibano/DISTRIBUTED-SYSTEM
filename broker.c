@@ -4,6 +4,12 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -13,11 +19,16 @@
 #include <netdb.h>
 #include "linked_list.h"
 #include "lines.h"
+#include "topic_server.h"
 
+//Estructura necesaria para pasar al thread sus parametros unicos
 struct arg_struct{
 	char subscriber_ip[128];
 	int socket;
 };
+
+//Establecer estructura de consulta de RPCs
+CLIENT *clnt;
 
 struct sockaddr_in server_addr, client_addr;
 
@@ -27,13 +38,14 @@ int mensaje_no_copiado = 1;
 pthread_cond_t cond_mensaje;
 Topic_list tl = NULL;
 
-//NO OLVIDARSE DE AÑADIR LA FUNCION
 void print_usage() {
 	    printf("Usage: broker -p puerto -r direccion rpc\n");
 }
 
 void tratar_peticion(struct arg_struct *args){
-		//Bloqueamos la copia de newsd para evitar conflictos
+		//Sirve para evaluar resultado de operacion RPC
+		enum clnt_stat retval;
+		//Bloqueamos la copia de parametros para evitar condiciones de carrera
 		pthread_mutex_lock(&mutex_mensaje);
 		int tsd = args->socket;
 		char subscriber_ip[128];
@@ -41,212 +53,271 @@ void tratar_peticion(struct arg_struct *args){
 		mensaje_no_copiado = 0;
 		pthread_cond_signal(&cond_mensaje);
 		pthread_mutex_unlock(&mutex_mensaje);
-
-
+		//Bandera para realizar el bucle de operaciones
 		int flag = 1;
-		//Hay que sacar la ip del newsd cuando el suscriptor se conecta
 		char operacion[12];
-		char tema[128];
-		char texto[1024];
-		char puerto[6];
-		struct publication;
+		char tema[130];
+		char texto[1030];
+		char puerto[10];
+		//Numero de bytes escritos/leidos
 		int n;
 		while (flag) {
-			//LEEMOS OPERACION
+			//Leemos la operacion recibida
 			n = readLine(tsd, operacion, sizeof(operacion));
 			if((n == -1) || (strcmp(operacion, "exit") == 0)) {
 				flag = 0;
 				break;
 			}
-			//SI ES OPERACION, ESPERAMOS 2 MENSAJES MAS
+			//Gestionamos la publicacion de un mensaje
 			if(strcmp(operacion, "PUBLISH") == 0) {
-				//ESCRIBIMOS LA OPERACION
-				writeLine(1, operacion, n);
-				//LEEMOS EL TEMA
+				//Escritura de la operacion por pantalla
+				//writeLine(1, operacion, n);
+				//Leemos el tema de la publicacion
 				n = readLine(tsd, tema, sizeof(tema));
-				//printf("%s\n", tema);
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL TEMA
-				writeLine(1, tema, n);
-				//LEEMOS EL TEXTO
+				//Escribimos el tema recibido
+				//writeLine(1, tema, n);
+				//Leemos el texto de la publicacion
 				n = readLine(tsd, texto, sizeof(texto));
 				if((n == -1) || (strcmp(texto, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL TEXTO
-				writeLine(1, texto, n);
+				//Escribimos el texto de la publicacion
+				//writeLine(1, texto, n);
+				//Debemos interrumpir el bucle de operaciones, la publicacion es unica por llamada
 				flag = 0;
-				//GUARDAMOS PUBLICACION EN LISTA
+				//Guardamos el nuevo tema de publicacion en la lista enlazada
 				struct topic *tp = (struct topic*) malloc(sizeof(struct topic));
 				strcpy(tp->name, tema);
 				tp->user_list = NULL;
 				tp->next_topic = NULL;
+
+				//Guardamos el texto asociado a la publicacion en el servidor RPC
+				int res;
+				retval = store_topic_text_1(tema, texto, &res, clnt);
+				if (retval !=  RPC_SUCCESS) {
+					clnt_perror(clnt, "call failed:");
+				}
+
+				if (res == 0) {
+					printf("Texto insertado correctamente\n");
+				} else {
+					printf("Problema al insertar el texto\n");
+				}
+				//Bloqueamos operacion con lista para evitar condiciones de carrera
 				pthread_mutex_lock(&mutex_operacion);
 				insert_topic(&tl, tp);
-				show(tl);
-				//MIO
 				struct topic *sub = search_topic(tl, tema);
+				pthread_mutex_unlock(&mutex_operacion);
+				//Liberamos la memoria reservada para el tema
+				free(tp);
 				User_list subs = sub->user_list;
-				//printf("Name: %s\n", subs->name);
+				//Iniciamos mecanismo de envio a multiples suscriptores al mismo tema
 				if(strcmp(sub->name, "NOT_FOUND") != 0){
-					if(subs == NULL) printf("MAL\n");
-					int i =1;
-					while(i){
+					//Anadimos una barra para luego separar el mensaje en el suscriptor
+					strcat(tema, "/");
+					//Mientras quedan suscriptores asociados al tema...
+					while(subs != NULL){
+						//Iniciamos la creacion del socket
 						struct sockaddr_in sub_addr;
 						int sock;
 						if ((sock=socket(AF_INET, SOCK_STREAM, 0))==-1){
 							printf("Error en la creación del socket");
 						}
-						printf("Creo bien el socket\n");
-						printf("Usuario: %s\n", subs->ip);
-						printf("PORT USUARIO: %ld\n", subs->port);
 						struct hostent *hp;
 						bzero((char*)&sub_addr, sizeof(sub_addr));
 						hp = gethostbyname(subs->ip);
 						memcpy(&(sub_addr.sin_addr), hp->h_addr, hp->h_length);
-						//sub_addr.sin_addr.s_addr = *(long *) hp->h_addr;
 						sub_addr.sin_family = AF_INET;
 						sub_addr.sin_port = htons((short)subs->port);
-
+						//Establecemos la conexion con el suscriptor
 						if(connect(sock, (struct sockaddr*) &sub_addr,
 													sizeof(sub_addr)) < 0) {
-							printf("Error en la conexión\n");
+							printf("Error in the connection to subscriber\n");
+							//Si no es posible la conexion, se le quita la suscripcion
+							delete_user_topic(&tl, tema, subs->ip, subs->port);
 						}
-						printf("Conexion\n");
-						if(enviar(sock, tema, sizeof(tema)) == -1){
+						//Envio del tema al suscriptor
+						if(enviar(sock, tema, strlen(tema) + 1) == -1){
 							printf("Error en el tema\n");
 						}else{
-							printf("Enviado tema\n");
+							//printf("Enviado tema\n");
 						}
-						if(enviar(sock, texto, sizeof(texto)) == -1){
+						//Envio del texto al suscriptor
+						if(enviar(sock, texto, strlen(texto) + 1) == -1){
 							printf("Error en el texto\n");
 						}else{
-							printf("Enviado texto\n");
+							//printf("Enviado texto\n");
 						}
+						//Buscamos el siguiente usuario potencial
 						subs = subs->next_user;
-						i = 0;
+						//Cerramos el socket
+						close(sock);
 					}
 				}
-				show(tl);
-				//MIO
-				pthread_mutex_unlock(&mutex_operacion);
-				free(tp);
+				//printf("\n------------------------\n");
+			//Gestionamos la suscripcion al mensaje
 			} else if (strcmp(operacion, "SUBSCRIBE") == 0) {
-				//ESCRIBIMOS LA OPERACION
-				writeLine(1, operacion, n);
-				//LEEMOS EL TEMA
+				//Escribimos la operacion realizada
+				//writeLine(1, operacion, n);
+				//Leemos el tema recibido
 				n = readLine(tsd, tema, sizeof(tema));
-				//printf("%s\n", tema);
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL TEMA
-				writeLine(1, tema, n);
-				//LEEMOS EL PUERTO
+				//Escribimos el tema recibido
+				//writeLine(1, tema, n);
+				//Recibimos el puerto de escucha del suscriptor
 				n = readLine(tsd, puerto, sizeof(puerto));
-				//printf("%s\n", tema);
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL PUERTO
-				writeLine(1, puerto, n);
-				//OPERACION CORRECTA
-				//PROBLEMA, NO SE COMO MANDAR EL DATO PARA QUE SE LEA BIEN EN JAVA
-				//unsigned char c = 0;
-				//writeLine(tsd, &c, sizeof(c));
-				//char *ptr;
+				//Escribimos el puerto recibido
+				//writeLine(1, puerto, n);
+				//Transformamos el puerto en tipo long
 				long port = strtol(puerto, NULL, 10);
-				printf("Direccion ip: %s\n", subscriber_ip);
-				printf("Puerto: %ld\n", port);
+				//Bloqueamos operaciones con lista para evitar condiciones de carrera
 				pthread_mutex_lock(&mutex_operacion);
-				//MIO
 				char *r1 = "0";
 				char *r2 = "1";
+				//Si el topic no existe, lo creamos tambien aparte de insertar el usuario
 				int resp = insert_user_notopic(&tl, tema, subscriber_ip, port);
 				if (resp == -1) {
+					//Si el topic existe, solo insertamos el usuario en su lista de usuarios
 					resp = insert_user_topic(&tl, tema, subscriber_ip, port);
 				}
 				if(resp == 0){
-					if(enviar(tsd, r1, sizeof(r1)) == 0){
-						printf("ENVIADO 0\n");
+					if(enviar(tsd, r1, strlen(r1) + 1) == 0){
+						//printf("ENVIADO 0\n");
 					}else{
 						printf("NO ENVIADO 0\n");
 					}
 				}else{
-					if(enviar(tsd, r2, sizeof(r2)) == 0){
-						printf("ENVIADO 1\n");
+					if(enviar(tsd, r2, strlen(r2) + 1) == 0){
+						//printf("ENVIADO 1\n");
 					}else{
 						printf("NO ENVIADO 1\n");
 					}
 				}
-				//MIO
-				show(tl);
+				//Mostramos el estado de la lista despues de las operaciones
+				//show(tl);
 				pthread_mutex_unlock(&mutex_operacion);
+				//Consultamos el ultimo texto disponible para ese tema mediante RPC
+				char *ultimo_texto = malloc(1025);
+				retval = retrieve_topic_text_1(tema, &ultimo_texto, clnt);
+				if (retval !=  RPC_SUCCESS) {
+					clnt_perror(clnt, "call failed:");
+				}
+				//Si existia con anterioridad el topic, entonces mandamos su ultimo texto no vacio
+				if (strcmp(ultimo_texto, "") != 0) {
+					//Creamos el socket correspondiente
+					struct sockaddr_in sub_addr;
+					int sock;
+					if ((sock=socket(AF_INET, SOCK_STREAM, 0))==-1){
+						printf("Error en la creación del socket");
+					}
+					//printf("Creo bien el socket\n");
+					//printf("Usuario: %s\n", subscriber_ip);
+					//printf("PORT USUARIO: %ld\n", port);
+					struct hostent *hp;
+					bzero((char*)&sub_addr, sizeof(sub_addr));
+					hp = gethostbyname(subscriber_ip);
+					memcpy(&(sub_addr.sin_addr), hp->h_addr, hp->h_length);
+					//sub_addr.sin_addr.s_addr = *(long *) hp->h_addr;
+					sub_addr.sin_family = AF_INET;
+					sub_addr.sin_port = htons((short) port);
+
+					if(connect(sock, (struct sockaddr*) &sub_addr,
+												sizeof(sub_addr)) < 0) {
+						printf("Error en la conexión\n");
+					}
+					//Concatenamos una barra para separar el texto del tema en el suscriptor
+					strcat(tema, "/");
+					//Enviamos tema y texto
+					if(enviar(sock, tema, strlen(tema) + 1) == -1){
+						printf("Error en el tema\n");
+					}else{
+						//printf("Enviado tema\n");
+					}
+					if(enviar(sock, ultimo_texto, strlen(ultimo_texto) + 1) == -1){
+						printf("Error en el texto\n");
+					}else{
+						//printf("Enviado texto\n");
+					}
+					close(sock);
+				}
+				free(ultimo_texto);
+				//printf("\n------------------------\n");
+			//Gestionamos dejar de estar suscrito a un tema
 			} else if (strcmp(operacion, "UNSUBSCRIBE") == 0) {
-				//ESCRIBIMOS LA OPERACION
+				//Escribimos la operacion recibida
 				writeLine(1, operacion, n);
-				//LEEMOS EL TEMA
+				//Leemos el tema que nos envian
 				n = readLine(tsd, tema, sizeof(tema));
-				//printf("%s\n", tema);
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL TEMA
+				//Escribimos el tema recibido
 				writeLine(1, tema, n);
-				//LEEMOS EL PUERTO
+				//Leemos el puerto de escucha del suscriptor
 				n = readLine(tsd, puerto, sizeof(puerto));
-				//printf("%s\n", tema);
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
 					flag = 0;
 					break;
 				}
-				//ESCRIBIMOS EL PUERTO
+				//Escribimos el puerto recibido
 				writeLine(1, puerto, n);
-				//OPERACION CORRECTA
-				//PROBLEMA, NO SE COMO MANDAR EL DATO PARA QUE SE LEA BIEN EN JAVA
-				//unsigned char c = 0;
-				//writeLine(tsd, &c, sizeof(c));
+				//Convertimos el puerto a tipo long
 				long port = strtol(puerto, NULL, 10);
+				//Bloqueamos las operaciones de lista para evitar condiciones de carrera
 				pthread_mutex_lock(&mutex_operacion);
-				//MIO
 				char *r1 = "0";
 				char *r2 = "1";
+				//Borramos un usuario concreto del topic que nos envian
 				int resp = delete_user_topic(&tl, tema, subscriber_ip, port);
 				if(resp == 0){
-					enviar(tsd, r1, sizeof(r1));
+					enviar(tsd, r1, strlen(r1) + 1);
 				}else{
-					enviar(tsd, r2, sizeof(r2));
-				}
-				//MIO
-				show(tl);
-				pthread_mutex_unlock(&mutex_operacion);
-			}else if(strcmp(operacion, "QUIT") == 0){
-				writeLine(1, operacion, n);
-				//LEEMOS EL PUERTO
-				n = readLine(tsd, puerto, sizeof(puerto));
-				//ESCRIBIMOS EL PUERTO
-				writeLine(1, puerto, n);
-
-				long port = strtol(puerto, NULL, 10);
-				pthread_mutex_lock(&mutex_operacion);
-				if(quit(&tl, subscriber_ip, port) == -1){
-					printf("ERROR EN EL QUIT\n");
+					enviar(tsd, r2, strlen(r2) + 1);
 				}
 				//show(tl);
 				pthread_mutex_unlock(&mutex_operacion);
+				//printf("\n------------------------\n");
+			//Mostramos la operacion de quitar la suscripcion de un usuario de todos los temas
+			} else if (strcmp(operacion, "QUIT") == 0){
+				//Escribimos la operacion recibida
+				//writeLine(1, operacion, n);
+				//Leemos el puerto de escucha
+				n = readLine(tsd, puerto, sizeof(puerto));
+				//Escribimos el puerto recibido
+				//writeLine(1, puerto, n);
+				//Transformamos el puerto a long
+				long port = strtol(puerto, NULL, 10);
+				pthread_mutex_lock(&mutex_operacion);
+				//Iniciamos la operacion quit
+				if(quit(&tl, subscriber_ip, port) == -1){
+					printf("[ERROR] EN QUIT\n");
+				}
+				//show(tl);
+				pthread_mutex_unlock(&mutex_operacion);
+				//No queremos hacer mas operaciones con el suscriptor
+				flag = 0;
+				//printf("\n------------------------\n");
 			}
 		}
 		close(tsd);
 }
 
 int main(int argc, char *argv[]) {
+	//Sirve para evaluar la respuesta RCP
+	enum clnt_stat retval;
 	int  option = 0;
 	char puerto[256]= "";
 	char rpc[256] = "";
@@ -268,9 +339,26 @@ int main(int argc, char *argv[]) {
 		print_usage();
 		exit(-1);
 	}
+	//Localizar el servidor RPC
+	clnt = clnt_create(rpc, topic_server, topic_server_v1, "tcp");
+	if (clnt == NULL) {
+		clnt_pcreateerror(rpc);
+		return -1;
+	}
+	//Iniciamos el servicio de BBDD mediante RPC
+	int res;
+	retval = init_1(&res, clnt);
+	if (retval !=  RPC_SUCCESS) {
+		clnt_perror(clnt, "call failed:");
+	}
 
-
-	printf("Puerto: %s\n", puerto);
+	/*
+	if (res == 0) {
+		printf("Servicio de BBDD inicializado correctamente\n");
+	} else {
+		printf("Problema al iniciar el servicio de BBDD\n");
+	}
+	*/
 
 	int sd, newsd;
 	socklen_t size = sizeof client_addr;
@@ -289,12 +377,13 @@ int main(int argc, char *argv[]) {
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(atoi(puerto));
 	server_addr.sin_addr.s_addr = INADDR_ANY;
-	/* bind */
+
 	if (bind(sd,(struct sockaddr *)&server_addr,
 		sizeof(server_addr)) <0) {
 		printf("Error en el bind\n");
 		return(-1);
 	}
+
 	listen(sd,SOMAXCONN);
 
 	pthread_attr_t t_attr;
@@ -311,13 +400,11 @@ int main(int argc, char *argv[]) {
 			return(-1);
 		}
 
-		printf("IP cliente: %s\n", inet_ntoa(client_addr.sin_addr));
+		//printf("IP cliente: %s\n", inet_ntoa(client_addr.sin_addr));
 		struct arg_struct *args = malloc(sizeof(struct arg_struct));
 		args->socket = newsd;
 		strcpy(args->subscriber_ip, inet_ntoa(client_addr.sin_addr));
-		printf("IP antes de thread: %s\n", args->subscriber_ip);
 
-		printf("Conexion aceptada\n");
 		pthread_create(&thid, &t_attr, (void *)tratar_peticion, (void *)args);
 
 	    pthread_mutex_lock(&mutex_mensaje);
@@ -327,8 +414,7 @@ int main(int argc, char *argv[]) {
 	    mensaje_no_copiado = 1;
 	    pthread_mutex_unlock(&mutex_mensaje);
 	    free(args);
-	/* transferir datos sobre newsd */
-	/* procesar la petición utilizando newsd */
 	}
 	close(sd);
+	clnt_destroy(clnt);
 }
