@@ -232,20 +232,18 @@ struct topic* search_topic(Topic_list tl, char *name) {
 int quit(Topic_list *tl,  char *ip, long port) {
 	Topic_list cursor = *tl;
 	int code = -1;
-	while(cursor != NULL){
-		//printf("TOPIC: %s\n", cursor->name);
-		struct topic* tp = search_topic(cursor, cursor->name);
-		if (verify_user(tp->user_list, ip, port) == -1) {
-			//printf("NO USUARIO\n");
-			cursor = cursor->next_topic;
-		}else{
-			//printf(" USUARIO\n");
-			if(delete_user_topic(&cursor, cursor->name, ip, port) == -1){
-				return code;
+
+	while (cursor != NULL) {
+		if (verify_user(cursor->user_list, ip, port) != -1) {
+			if(delete_user_topic(&cursor, cursor->name, ip, port) == -1) {
+				return -1;
+			} else {
+				code = 1;
 			}
 		}
+		cursor = cursor->next_topic;
 	}
-	code = 1;
+
 	return code;
 }
 /*
@@ -266,7 +264,6 @@ int modify(Publication_list *l, char *key, char *value1, float value2) {
 	}
 	return code;
 }
-
 int verify(Publication_list l, char *key){
 	int code = -1;
 	Publication_list cursor = l;
