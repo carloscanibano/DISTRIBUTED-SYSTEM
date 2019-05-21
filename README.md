@@ -1,1 +1,1 @@
-# sistema-distribuido
+# DISTRIBUTED SYSTEM (C & JAVA)
