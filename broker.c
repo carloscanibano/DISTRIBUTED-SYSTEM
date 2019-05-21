@@ -104,7 +104,7 @@ void tratar_peticion(struct arg_struct *args){
 				}
 
 				if (res == 0) {
-					printf("Texto insertado correctamente\n");
+					//printf("Texto insertado correctamente\n");
 				} else {
 					printf("Problema al insertar el texto\n");
 				}
@@ -210,6 +210,7 @@ void tratar_peticion(struct arg_struct *args){
 				pthread_mutex_unlock(&mutex_operacion);
 				//Consultamos el ultimo texto disponible para ese tema mediante RPC
 				char *ultimo_texto = malloc(1025);
+				strcpy(ultimo_texto, "");
 				retval = retrieve_topic_text_1(tema, &ultimo_texto, clnt);
 				if (retval !=  RPC_SUCCESS) {
 					clnt_perror(clnt, "call failed:");
@@ -257,7 +258,7 @@ void tratar_peticion(struct arg_struct *args){
 			//Gestionamos dejar de estar suscrito a un tema
 			} else if (strcmp(operacion, "UNSUBSCRIBE") == 0) {
 				//Escribimos la operacion recibida
-				writeLine(1, operacion, n);
+				//writeLine(1, operacion, n);
 				//Leemos el tema que nos envian
 				n = readLine(tsd, tema, sizeof(tema));
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
@@ -265,7 +266,7 @@ void tratar_peticion(struct arg_struct *args){
 					break;
 				}
 				//Escribimos el tema recibido
-				writeLine(1, tema, n);
+				//writeLine(1, tema, n);
 				//Leemos el puerto de escucha del suscriptor
 				n = readLine(tsd, puerto, sizeof(puerto));
 				if((n == -1) || (strcmp(tema, "exit") == 0)) {
@@ -273,7 +274,7 @@ void tratar_peticion(struct arg_struct *args){
 					break;
 				}
 				//Escribimos el puerto recibido
-				writeLine(1, puerto, n);
+				//writeLine(1, puerto, n);
 				//Convertimos el puerto a tipo long
 				long port = strtol(puerto, NULL, 10);
 				//Bloqueamos las operaciones de lista para evitar condiciones de carrera
@@ -303,7 +304,7 @@ void tratar_peticion(struct arg_struct *args){
 				pthread_mutex_lock(&mutex_operacion);
 				//Iniciamos la operacion quit
 				if(quit(&tl, subscriber_ip, port) == -1){
-					printf("[ERROR] EN QUIT\n");
+					printf("QUIT ERROR / NO SUBSCRIBED TOPICS FOUND\n");
 				}
 				//show(tl);
 				pthread_mutex_unlock(&mutex_operacion);
@@ -343,7 +344,7 @@ int main(int argc, char *argv[]) {
 	clnt = clnt_create(rpc, topic_server, topic_server_v1, "tcp");
 	if (clnt == NULL) {
 		clnt_pcreateerror(rpc);
-		return -1;
+		//return -1;
 	}
 	//Iniciamos el servicio de BBDD mediante RPC
 	int res;
