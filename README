@@ -1,0 +1,12 @@
+El servicio RPC está en su totalidad incluído en el makefile. Solo habría que ejecutar el comando make para generar todos los ejecutables escritos en c. Para ejecutar el servidor RPC simplemente utilizamos ./topic_server
+
+Para generar el servicio web nos aseguramos de estar en la carpeta raíz del proyecto (IMPORTANTE). Después ejecutamos los siguientes comandos:
+
+→ javac format/FormatService.java
+→ javac format/FormatServicePublisher.java
+
+Después ejecutamos la publicación del servicio web para que pueda ser utilizado por el suscriptor:
+→ java format/FormatServicePublisher
+
+Para ejecutar el broker tener en cuenta que el servicio web se ejecuta en el puerto 2000. Utilizar otro.
+La ejecución de todos estos servicios es necesaria para poner a funcionar la aplicación.

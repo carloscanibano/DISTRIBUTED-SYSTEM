@@ -3,120 +3,94 @@ import java.net.Socket;
 import gnu.getopt.Getopt;
 import java.net.ServerSocket;
 
-
 class suscriptor {
-
-	/********************* TYPES **********************/
-
-
 	/******************* ATTRIBUTES *******************/
-
 	private static int port = -1;
-	private static String _server   = null;
+	private static String _server = null;
 	private static short _port = -1;
 	private static Socket clientSocket = null;
-  private static OutputStream outputStream = null;
-  private static DataInputStream inputStream = null;
-  private static BufferedReader bufferedReader = null;
-  private static ServerSocket svSocket = null;
+ 	private static OutputStream outputStream = null;
+ 	private static DataInputStream inputStream = null;
+  	private static BufferedReader bufferedReader = null;
+  	private static ServerSocket svSocket = null;
 	private static ClientThread thread = null;
 
 	/********************* METHODS ********************/
-
 	static int subscribe(String topic) throws Exception
-	{
+	{	
+		//Si el socket asociado no esta creado, obtenemos el puerto e inicializamos el thread
 		if (svSocket == null) {
 			svSocket = new ServerSocket(0);
 			port = svSocket.getLocalPort();
 			thread = new ClientThread(svSocket);
 			thread.start();
 		}
-		System.out.println("El valor puerto: " + port);
+		//Limite de longitud del topic
 		if (topic.length() > 128) return 1;
-		// Write your code here
+		//Mandamos el codigo de operacion y el tema
 		outputStream.write(("SUBSCRIBE" + "\0").getBytes());
-	  outputStream.write((topic + "\0").getBytes());
-		//Listener port
+	  	outputStream.write((topic + "\0").getBytes());
+		//El broker necesita saber el puerto al que enviar los textos
 		outputStream.write((String.valueOf(port) + "\0").getBytes());
-		//MIO
-		/*
-		int num[] ;
-		int res;
-		ObjectInput in = new ObjectInputStream(inputStream);
-
-		num = (int[]) in.readObject();
-		res = num[0] + num[1];
-		DataOutputStream ostream = new DataOutputStream(clientSocket.getOutputStream());
-		ostream.writeInt(res);
-		ostream.flush();*/
-
+		//Leemos byte de resultado de la operacion
 		byte[] aux = null;
 		int b = 0;
-		aux = new byte[1];
-	  byte res = inputStream.readByte();
-	  String s = Byte.toString(res);
-		//String s = new String(new byte[] { res });
-	  System.out.println("El valor recibido es: " + s);
-		String s1 = "0";
+		aux = new byte[2];
+	  	b = inputStream.read(aux);
+	  	String s = new String(aux, 0, b);
 
-		if (s.equals(s1)){
+		if (s.equals("0\0")){
 			System.out.println("SUBSCRIBE OK");
 		}else{
-			System.out.println("SUSCRIBE FAIL");
+			System.out.println("SUBSCRIBE FAIL");
 		}
-		//MIO
 
-
-		/*
-		DataInputStream  in  = new DataInputStream(clientSocket.getInputStream());
-		byte[] aux = null;
-		aux = new byte[256];
-	   	in.read(aux);
-	   	String s = new String(aux);
-	   	System.out.println("El valor recibido es: " + s);
-		if (s.equals("0")) System.out.println("Subscribe to: " + topic);
-		*/
 		return 1;
 	}
 
 	static int unsubscribe(String topic) throws Exception
-	{
+	{	
+		//Limite de longitud del topic
 		if (topic.length() > 128) return 1;
-		// Write your code here
+		//Mandamos el codigo de operacion y el tema
 		outputStream.write(("UNSUBSCRIBE" + "\0").getBytes());
 	   	outputStream.write((topic + "\0").getBytes());
-		//Listener port
+		//Necesariamente debe existir un puerto de escucha
 		if (port == -1) {
 			System.out.println("Can't unsubscribe, no port was listening");
 			return -1;
 		}
+		//Enviamos el puerto de escucha
 		outputStream.write((String.valueOf(port) + "\0").getBytes());
-		//MIO
-		//System.out.println("esperando");
+		//Leemos el byte de respuesta de operacion
 		byte[] aux = null;
-		aux = new byte[1];
-	  inputStream.read(aux);
-		//System.out.println("esperando");
-	  String s = new String(aux);
-		//System.out.println("esperando");
-	  System.out.println("El valor recibido es: " + s);
-		String s1 = "0";
-		if (s.equals(s1)){
+		int b = 0;
+		aux = new byte[2];
+	  	b = inputStream.read(aux);
+	  	String s = new String(aux, 0, b);
+
+		if (s.equals("0\0")){
 			System.out.println("UNSUBSCRIBE OK");
 		}else{
-			System.out.println("UNSUSCRIBE FAIL");
+			System.out.println("TOPIC NOT SUBSCRIBED");
 		}
-		//MIO
-
-		//if (!reply.equals("0")) System.out.println("Unsubscribe to: " + topic);
 
 		return 1;
 	}
 
 	static int quit() throws Exception
-	{
+	{	
+		//Necesariamente debe existir un puerto de escucha
+		if (port == -1) {
+			System.out.println("Can't unsubscribe, no port was listening");
+			return -1;
+		}
+		//Enviamos el codigo de operacion y el puerto de escucha
 		outputStream.write(("QUIT" + "\0").getBytes());
 		outputStream.write((String.valueOf(port) + "\0").getBytes());
+		//Si el socket existe, lo cerramos para parar el thread asociado
+		if (svSocket != null) svSocket.close();
+
 		return 1;
 	}
 
@@ -156,13 +130,11 @@ class suscriptor {
 						}
                     }
 
-          /************** QUIT **************/
-          else if (line[0].equals("QUIT")){
+         			/************** QUIT **************/
+          			else if (line[0].equals("QUIT")){
 						if (line.length == 1) {
 							exit = true;
 							quit();
-							if(thread != null) thread.interrupt();
-							if(svSocket != null) svSocket.close();
 						} else {
 							System.out.println("Syntax error. Use: QUIT");
 						}
@@ -229,10 +201,7 @@ class suscriptor {
 		return true;
 	}
 
-
-
 	/********************* MAIN **********************/
-
 	public static void main(String[] argv)
 	{
 		if(!parseArguments(argv)) {
@@ -240,37 +209,23 @@ class suscriptor {
 			return;
 		}
 
-
-		// Write code here
 	    try {
-	    	//CREACION DEL SOCKET
+	    	//Creacion del socket utilizado para conectarnos al broker
 	    	clientSocket = new Socket(_server, _port);
 	    	outputStream = clientSocket.getOutputStream();
 	    	inputStream = new DataInputStream(clientSocket.getInputStream());
 	    	bufferedReader = new BufferedReader(new
 	    	InputStreamReader(clientSocket.getInputStream()));
-	    	//INVOCACION DE CONSOLA
+	    	//Llamamos a la consola
 	    	shell();
-	    	/*
-	    	String reply;
-	    	while (true) {
-		      	reply = bufferedReader.readLine();
-		      	if (reply.equalsIgnoreCase("End")) {
-		        	break;
-		       	}
-		      	if(reply.length()!= 0){
-		       		System.out.println("you got reply ---"+ reply);
-		       	}
-	    	}
-	    	*/
-	    	//CERRAR STREAMS
+	    	//Liberamos los recursos asociados al uso del programa
 	    	outputStream.close();
 	   		bufferedReader.close();
 	   		clientSocket.close();
 	  	} catch (Exception e) {
+	  		System.out.println("Error in the connection to the broker <" + _server + ">:<" + _port + ">");
 	    	e.printStackTrace();
 	  	}
-
 		System.out.println("+++ FINISHED +++");
 	}
 }

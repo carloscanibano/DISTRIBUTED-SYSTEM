@@ -73,11 +73,12 @@ int main() {
 	insert_user_topic(&topics, "Basket", "127.0.0.8", 5434);
 
 	//Insertar un usuario a un tema que no existe
-	insert_user_notopic(&topics, "Hockey", "127.0.0.9", 2222);
+	insert_user_notopic(&topics, "Hockey", "127.0.0.7", 2323);
 	insert_user_notopic(&topics, "Padel", "127.0.0.10", 3333);
 
 	//Borrar un usuario de un tema que existe
 	delete_user_topic(&topics, "Tenis", "127.0.0.1", 50000);
+
 	//Borrar un usuario de un tema que no existe
 	delete_user_topic(&topics, "Armas", "127.0.0.12", 95000);
 
